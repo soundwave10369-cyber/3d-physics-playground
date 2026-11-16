@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Physics Playground</title>
+<style>
+:root{--bg:#e9eef5;--panel:rgba(255,255,255,.92);--ink:#1c2430;--mut:#667085;--acc:#3b6df0;--bd:#d5dce7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141922;--panel:rgba(30,37,50,.92);--ink:#e8edf6;--mut:#98a3b6;--bd:#33405a}}
+:root[data-theme="dark"]{--bg:#141922;--panel:rgba(30,37,50,.92);--ink:#e8edf6;--mut:#98a3b6;--bd:#33405a}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);font:14px system-ui,-apple-system,Segoe UI,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#bar{position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));background:var(--panel);border:1px solid var(--bd);border-radius:14px;padding:8px;backdrop-filter:blur(8px);max-width:560px;margin:auto}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+button{flex:1;min-width:70px;padding:10px 6px;border:1px solid var(--bd);border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+button:active{background:var(--acc);color:#fff}
+button.clr{color:#d92d20}
+.sl{display:flex;align-items:center;gap:8px;margin-top:8px}
+.sl label{width:78px;color:var(--mut)}.sl input{flex:1;accent-color:var(--acc)}.sl output{width:36px;text-align:right;font-variant-numeric:tabular-nums}
+#hint{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:0;right:0;text-align:center;color:var(--mut);font-size:12px;pointer-events:none}
+#cnt{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;color:var(--mut);font-size:12px;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Drag a shape to move it · drag empty space to orbit · wheel/pinch to zoom</div>
+<div id="cnt"></div>
+<div id="bar">
+  <div class="row">
+    <button data-s="sphere">● Sphere</button>
+    <button data-s="box">■ Box</button>
+    <button data-s="cyl">▮ Cylinder</button>
+    <button class="clr" id="clear">Clear</button>
+  </div>
+  <div class="sl"><label>Gravity</label><input id="g" type="range" min="0" max="25" step="0.5" value="9.8"><output id="go">9.8</output></div>
+  <div class="sl"><label>Bounce</label><input id="r" type="range" min="0" max="1" step="0.05" value="0.35"><output id="ro">0.35</output></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();
+const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+scene.background=new THREE.Color(dark?0x141922:0xe9eef5);
+const cam=new THREE.PerspectiveCamera(50,1,.1,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x667088,.75));
+const sun=new THREE.DirectionalLight(0xffffff,.8);
+sun.position.set(8,16,6);sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-15,right:15,top:15,bottom:-15,near:1,far:50});
+scene.add(sun);
+
+// ground
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshStandardMaterial({color:dark?0x232b3a:0xf6f8fb}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const grid=new THREE.GridHelper(60,60,dark?0x4a5873:0xb7c2d4,dark?0x2f3a50:0xdde3ee);grid.position.y=.01;scene.add(grid);
+
+// physics
+const world=new CANNON.World();
+world.gravity.set(0,-9.8,0);
+world.broadphase=new CANNON.SAPBroadphase(world);
+world.solver.iterations=14;world.solver.tolerance=.001;
+world.allowSleep=true;
+world.defaultContactMaterial.friction=.45;
+world.defaultContactMaterial.restitution=.35;
+world.defaultContactMaterial.contactEquationStiffness=1e7;
+world.defaultContactMaterial.contactEquationRelaxation=4;
+const gb=new CANNON.Body({mass:0,shape:new CANNON.Plane()});
+gb.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(gb);
+
+const items=[];const MAX=120;
+function spawn(type,pos){
+  let shape,geo;
+  if(type==='sphere'){shape=new CANNON.Sphere(.5);geo=new THREE.SphereGeometry(.5,28,20);}
+  else if(type==='box'){shape=new CANNON.Box(new CANNON.Vec3(.5,.5,.5));geo=new THREE.BoxGeometry(1,1,1);}
+  else{ // cannon 0.6 cylinders run along Z; rotate the mesh geometry to match
+    shape=new CANNON.Cylinder(.5,.5,1,16);geo=new THREE.CylinderGeometry(.5,.5,1,16);geo.rotateX(Math.PI/2);}
+  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(Math.random(),.65,.55),roughness:.55}));
+  mesh.castShadow=mesh.receiveShadow=true;scene.add(mesh);
+  const body=new CANNON.Body({mass:1,shape,linearDamping:.02,angularDamping:.08});
+  body.position.copy(pos||new CANNON.Vec3((Math.random()-.5)*4,9+Math.random()*3,(Math.random()-.5)*4));
+  if(!pos){body.quaternion.setFromEuler(Math.random()*3,Math.random()*3,Math.random()*3);
+    body.angularVelocity.set((Math.random()-.5)*3,(Math.random()-.5)*3,(Math.random()-.5)*3);}
+  body.sleepSpeedLimit=.2;body.sleepTimeLimit=.8;
+  world.addBody(body);mesh.userData.body=body;items.push({mesh,body});
+  if(items.length>MAX)remove(items[0]);
+  count();
+}
+function remove(it){
+  if(drag&&drag.body===it.body)endDrag();
+  world.remove(it.body);scene.remove(it.mesh);it.mesh.geometry.dispose();it.mesh.material.dispose();
+  items.splice(items.indexOf(it),1);
+}
+function count(){document.getElementById('cnt').textContent=items.length+' bodies';}
+function tower(){for(let i=0;i<4;i++)spawn('box',new CANNON.Vec3(0,.5+i*1.02,0));}
+tower();
+
+// UI
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>spawn(b.dataset.s));
+document.getElementById('clear').onclick=()=>{[...items].forEach(remove);count();};
+const g=document.getElementById('g'),r=document.getElementById('r');
+function wake(){items.forEach(i=>i.body.wakeUp());}
+g.oninput=()=>{world.gravity.set(0,-g.value,0);go.textContent=(+g.value).toFixed(1);wake();};
+r.oninput=()=>{world.defaultContactMaterial.restitution=+r.value;ro.textContent=(+r.value).toFixed(2);wake();};
+
+// camera orbit
+let theta=.7,phi=1.05,dist=18;const target=new THREE.Vector3(0,2,0);
+function placeCam(){
+  cam.position.set(target.x+dist*Math.sin(phi)*Math.sin(theta),target.y+dist*Math.cos(phi),target.z+dist*Math.sin(phi)*Math.cos(theta));
+  cam.lookAt(target);
+}
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+
+// pointer: grab or orbit
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+const pts=new Map();let drag=null,orbit=false,pinch=0;
+function setRay(e){const rc=canvas.getBoundingClientRect();ndc.set((e.clientX-rc.left)/rc.width*2-1,-((e.clientY-rc.top)/rc.height)*2+1);ray.setFromCamera(ndc,cam);}
+function endDrag(){if(!drag)return;world.removeConstraint(drag.c);world.remove(drag.anchor);drag=null;}
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pts.size===2){endDrag();orbit=false;const [a,b]=[...pts.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);return;}
+  setRay(e);
+  const hit=ray.intersectObjects(items.map(i=>i.mesh))[0];
+  if(hit){
+    const body=hit.object.userData.body;body.wakeUp();
+    const anchor=new CANNON.Body({mass:0});anchor.collisionFilterGroup=0;anchor.collisionFilterMask=0;
+    anchor.position.set(hit.point.x,hit.point.y,hit.point.z);world.addBody(anchor);
+    const local=body.pointToLocalFrame(anchor.position);
+    const c=new CANNON.PointToPointConstraint(body,local,anchor,new CANNON.Vec3(),400*body.mass);
+    world.addConstraint(c);
+    const n=cam.getWorldDirection(new THREE.Vector3());
+    drag={body,anchor,c,plane:new THREE.Plane().setFromNormalAndCoplanarPoint(n,hit.point)};
+  } else orbit=true;
+});
+canvas.addEventListener('pointermove',e=>{
+  const p=pts.get(e.pointerId);if(!p)return;
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  if(pts.size===2){const [a,b]=[...pts.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);dist=Math.min(40,Math.max(6,dist*pinch/d));pinch=d;return;}
+  if(drag){setRay(e);const v=new THREE.Vector3();
+    if(ray.ray.intersectPlane(drag.plane,v)){v.y=Math.max(.2,v.y);drag.anchor.position.set(v.x,v.y,v.z);drag.body.wakeUp();}
+  } else if(orbit){theta-=dx*.006;phi=Math.min(1.5,Math.max(.15,phi-dy*.006));}
+});
+function up(e){pts.delete(e.pointerId);if(!pts.size){endDrag();orbit=false;}}
+canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);
+canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.min(40,Math.max(6,dist*(1+e.deltaY*.001)));},{passive:false});
+
+// loop
+let last=performance.now();
+function loop(t){
+  requestAnimationFrame(loop);
+  const dt=Math.min((t-last)/1000,.05);last=t;
+  world.step(1/60,dt,4);
+  for(let i=items.length-1;i>=0;i--){
+    const it=items[i],b=it.body;
+    if(b.position.y<-20||Math.abs(b.position.x)>60||Math.abs(b.position.z)>60){remove(it);count();continue;}
+    it.mesh.position.copy(b.position);it.mesh.quaternion.copy(b.quaternion);
+  }
+  placeCam();renderer.render(scene,cam);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
