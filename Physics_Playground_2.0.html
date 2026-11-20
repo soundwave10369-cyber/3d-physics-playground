@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="An interactive 3D physics laboratory. Experiment with gravity, collisions, mass, friction and motion.">
+<title>Physics Playground — Soundwave Labs</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#080d19;--panel:rgba(17,25,43,.94);--panel2:#111b30;
+  --line:rgba(148,163,184,.19);--text:#e8eefb;--muted:#91a0ba;
+  --accent:#65d5ff;--accent2:#8b9cff;--danger:#ff7185;
+  --shadow:0 18px 55px rgba(0,0,0,.32);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input{font:inherit}
+button{color:inherit}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.ambient{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 5%,rgba(49,105,180,.16),transparent 48%),linear-gradient(180deg,rgba(5,10,20,.1),rgba(5,10,20,.18))}
+.topbar{position:fixed;top:calc(14px + env(safe-area-inset-top));left:16px;right:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:none}
+.brand,.top-actions{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:11px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:rgba(12,19,34,.78);backdrop-filter:blur(14px);box-shadow:var(--shadow)}
+.brand-mark{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#4dc9f6,#6477ff);color:#07111e;font-weight:900;font-size:17px}
+.brand strong{display:block;font-size:13px;letter-spacing:.08em}
+.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.top-actions{display:flex;gap:8px}
+.icon-btn,.btn{border:1px solid var(--line);background:rgba(12,19,34,.84);backdrop-filter:blur(12px);border-radius:11px;padding:9px 12px;cursor:pointer;transition:.18s ease}
+.icon-btn:hover,.btn:hover{border-color:rgba(101,213,255,.55);transform:translateY(-1px)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;font-size:16px}
+#hint{position:fixed;top:82px;left:50%;transform:translateX(-50%);color:#aebbd0;background:rgba(9,15,28,.55);border:1px solid var(--line);padding:7px 12px;border-radius:999px;font-size:11px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(8px)}
+#stats{position:fixed;top:calc(82px + env(safe-area-inset-top));right:16px;display:flex;gap:7px;pointer-events:none}
+.stat{background:rgba(12,19,34,.78);border:1px solid var(--line);border-radius:10px;padding:7px 10px;min-width:70px;backdrop-filter:blur(10px)}
+.stat small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.1em}
+.stat b{font-size:13px;font-variant-numeric:tabular-nums}
+.panel{position:fixed;top:50%;right:16px;transform:translateY(-50%);width:280px;max-height:min(74vh,700px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;backdrop-filter:blur(18px);box-shadow:var(--shadow);scrollbar-width:thin;scrollbar-color:#35445f transparent}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.panel-head strong{font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.live{display:flex;align-items:center;gap:6px;color:#7de3b2;font-size:10px}
+.live:before{content:"";width:6px;height:6px;background:#55dfa1;border-radius:50%;box-shadow:0 0 10px #55dfa1}
+.section{padding:12px 0;border-top:1px solid var(--line)}
+.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;color:#dce7f8;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.section-title span{color:var(--muted);font-weight:500;letter-spacing:0;text-transform:none}
+.button-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.btn{font-size:11px;font-weight:650;padding:9px 7px;border-radius:10px;background:rgba(255,255,255,.035)}
+.btn.primary{background:linear-gradient(135deg,#49c8ee,#7288ff);color:#061321;border:0}
+.btn.danger{color:#ff91a0}
+.btn.wide{width:100%;margin-top:7px}
+.control{margin:11px 0}
+.control-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;color:#b9c6da;font-size:11px}
+.control output{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:700}
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+.toggle-row{display:flex;justify-content:space-between;align-items:center;color:#b9c6da;font-size:11px;margin-top:8px}
+select{width:100%;background:#101a2c;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px}
+.inspector{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.metric{background:rgba(255,255,255,.035);border:1px solid rgba(148,163,184,.1);padding:8px;border-radius:10px;min-width:0}
+.metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+.metric b{display:block;margin-top:3px;font-size:13px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#selection-name{color:var(--accent);font-size:10px}
+.bottom-note{position:fixed;left:16px;bottom:calc(14px + env(safe-area-inset-bottom));color:#8c9ab2;font-size:10px;background:rgba(9,15,28,.65);border:1px solid var(--line);padding:7px 10px;border-radius:10px;pointer-events:none}
+#toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,15px);opacity:0;transition:.2s;background:#16243a;border:1px solid #344967;color:#e9f5ff;padding:9px 13px;border-radius:10px;font-size:11px;pointer-events:none}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:760px){
+ .topbar{top:calc(9px + env(safe-area-inset-top));left:9px;right:9px}
+ .brand{padding:7px 9px}.brand-mark{width:28px;height:28px}.brand strong{font-size:11px}
+ #hint{top:62px;font-size:9px;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+ #stats{top:calc(94px + env(safe-area-inset-top));left:9px;right:auto;gap:5px}
+ .stat{min-width:57px;padding:5px 7px}.stat small{font-size:8px}.stat b{font-size:11px}
+ .panel{top:auto;bottom:calc(9px + env(safe-area-inset-bottom));left:9px;right:9px;transform:none;width:auto;max-height:42vh;padding:10px 12px;border-radius:15px}
+ .panel-head{margin-bottom:5px}.section{padding:8px 0}.control{margin:7px 0}
+ .bottom-note{display:none}
+ .btn{padding:8px 5px}
+}
+@media(max-width:390px){.panel{max-height:46vh}.top-actions .icon-btn{width:35px;height:35px}}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Interactive 3D physics simulation"></canvas>
+<div class="ambient"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">∑</div>
+    <div><strong>SOUNDWAVE LABS</strong><small>Physics Playground · 02.0</small></div>
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    <button class="icon-btn" id="help" title="Controls" aria-label="Show controls">?</button>
+  </div>
+</header>
+
+<div id="hint">Drag an object to move it · Drag empty space to orbit · Scroll or pinch to zoom</div>
+<div id="stats">
+  <div class="stat"><small>Objects</small><b id="count">0</b></div>
+  <div class="stat"><small>FPS</small><b id="fps">—</b></div>
+  <div class="stat"><small>Simulation</small><b id="run-state">LIVE</b></div>
+</div>
+
+<aside class="panel">
+  <div class="panel-head"><strong>Experiment controls</strong><span class="live" id="live-label">LIVE</span></div>
+
+  <div class="section">
+    <div class="section-title">Add objects <span>Build a system</span></div>
+    <div class="button-grid">
+      <button class="btn" data-spawn="sphere">● Sphere</button>
+      <button class="btn" data-spawn="box">■ Box</button>
+      <button class="btn" data-spawn="cylinder">▮ Cylinder</button>
+    </div>
+    <div class="button-grid" style="margin-top:7px">
+      <button class="btn" id="tower">▤ Tower</button>
+      <button class="btn" id="random">✣ Scatter</button>
+      <button class="btn danger" id="clear">Clear all</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Simulation <span>Time controls</span></div>
+    <div class="button-grid">
+      <button class="btn primary" id="pause">Ⅱ Pause</button>
+      <button class="btn" id="step">↦ Step</button>
+      <button class="btn" id="reset">↺ Reset</button>
+    </div>
+    <div class="control">
+      <div class="control-head"><label for="speed">Time scale</label><output id="speed-out">1.00×</output></div>
+      <input id="speed" type="range" min="0.1" max="2" step="0.05" value="1">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Environment <span>Global forces</span></div>
+    <div class="control">
+      <div class="control-head"><label for="gravity">Gravity</label><output id="gravity-out">9.8 m/s²</output></div>
+      <input id="gravity" type="range" min="0" max="25" step="0.1" value="9.8">
+    </div>
+    <div class="control">
+      <div class="control-head"><label for="wind">Wind force</label><output id="wind-out">0.0 N</output></div>
+      <input id="wind" type="range" min="-15" max="15" step="0.5" value="0">
+    </div>
+    <div class="control">
+      <div class="control-head"><label for="bounce">Restitution</label><output id="bounce-out">0.35</output></div>
+      <input id="bounce" type="range" min="0" max="1" step="0.01" value="0.35">
+    </div>
+    <div class="control">
+      <div class="control-head"><label for="friction">Friction</label><output id="friction-out">0.45</output></div>
+      <input id="friction" type="range" min="0" max="1" step="0.01" value="0.45">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">New object properties <span>Spawn settings</span></div>
+    <div class="control">
+      <div class="control-head"><label for="mass">Mass</label><output id="mass-out">1.0 kg</output></div>
+      <input id="mass" type="range" min="0.2" max="8" step="0.2" value="1">
+    </div>
+    <div class="control">
+      <div class="control-head"><label for="damping">Air resistance</label><output id="damping-out">0.02</output></div>
+      <input id="damping" type="range" min="0" max="0.3" step="0.01" value="0.02">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Object inspector <span id="selection-name">Nothing selected</span></div>
+    <div class="inspector">
+      <div class="metric"><small>Mass</small><b id="i-mass">—</b></div>
+      <div class="metric"><small>Speed</small><b id="i-speed">—</b></div>
+      <div class="metric"><small>Kinetic energy</small><b id="i-energy">—</b></div>
+      <div class="metric"><small>Height</small><b id="i-height">—</b></div>
+    </div>
+    <button class="btn wide" id="deselect">Deselect object</button>
+  </div>
+</aside>
+
+<div class="bottom-note">Soundwave Labs · Classical mechanics sandbox</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('c');
+if (!window.THREE || !window.CANNON) {
+  $('hint').textContent = 'The 3D libraries could not load. Check your internet connection and refresh.';
+  return;
+}
+
+// Renderer and scene
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+let dark = true;
+scene.background = new THREE.Color(0x080d19);
+const camera = new THREE.PerspectiveCamera(48, 1, .1, 220);
+scene.add(new THREE.HemisphereLight(0xc8e4ff, 0x34405a, 1.0));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.25);
+keyLight.position.set(9, 18, 10);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024,1024);
+Object.assign(keyLight.shadow.camera,{left:-18,right:18,top:18,bottom:-18,near:1,far:55});
+scene.add(keyLight);
+const fillLight = new THREE.PointLight(0x4b8dff,.7,55);
+fillLight.position.set(-8,7,-7);scene.add(fillLight);
+
+const groundMat = new THREE.MeshStandardMaterial({color:0x111d31,roughness:.88,metalness:.08});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(100,100),groundMat);
+ground.rotation.x=-Math.PI/2;ground.position.y=-.04;ground.receiveShadow=true;scene.add(ground);
+const grid = new THREE.GridHelper(100,100,0x345071,0x1d2c43);
+grid.position.y=.005;scene.add(grid);
+
+// Physics world
+const world = new CANNON.World();
+world.gravity.set(0,-9.8,0);
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.solver.iterations = 16;
+world.solver.tolerance = .001;
+world.allowSleep = true;
+world.defaultContactMaterial.friction = .45;
+world.defaultContactMaterial.restitution = .35;
+world.defaultContactMaterial.contactEquationStiffness = 1e7;
+world.defaultContactMaterial.contactEquationRelaxation = 4;
+const groundBody = new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:new CANNON.Material('ground')});
+groundBody.quaternion.setFromEuler(-Math.PI/2,0,0);
+world.addBody(groundBody);
+
+const objects=[];
+const MAX_OBJECTS=90;
+let selected=null, paused=false, timeScale=1, windForce=0, simTime=0;
+let theta=.72, phi=1.02, distance=19;
+const target=new THREE.Vector3(0,2.3,0);
+const raycaster=new THREE.Raycaster(), pointerNdc=new THREE.Vector2();
+let drag=null, orbit=false, pointers=new Map(), pinchDistance=0;
+let lastFrame=performance.now(), fpsFrames=0, fpsStamp=lastFrame, currentFps=0;
+
+function material(color){
+ return new THREE.MeshStandardMaterial({color,roughness:.48,metalness:.12});
+}
+function makeShape(type){
+ if(type==='sphere') return {shape:new CANNON.Sphere(.5),geometry:new THREE.SphereGeometry(.5,28,20)};
+ if(type==='cylinder') {
+   const geometry=new THREE.CylinderGeometry(.48,.48,1,20);
+   geometry.rotateX(Math.PI/2);
+   return {shape:new CANNON.Cylinder(.48,.48,1,20),geometry};
+ }
+ return {shape:new CANNON.Box(new CANNON.Vec3(.5,.5,.5)),geometry:new THREE.BoxGeometry(1,1,1)};
+}
+function spawn(type,position){
+ if(objects.length>=MAX_OBJECTS){toast('Object limit reached. Clear a few objects first.');return;}
+ const made=makeShape(type);
+ const color=new THREE.Color().setHSL(Math.random()*.18+.48,.72,.58);
+ const mesh=new THREE.Mesh(made.geometry,material(color));
+ mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
+ const mass=Number($('mass').value);
+ const body=new CANNON.Body({
+   mass,shape:made.shape,
+   linearDamping:Number($('damping').value),
+   angularDamping:.08,
+   allowSleep:true
+ });
+ body.position.copy(position || new CANNON.Vec3((Math.random()-.5)*4,8+Math.random()*3,(Math.random()-.5)*4));
+ if(!position){
+   body.quaternion.setFromEuler(Math.random()*2,Math.random()*2,Math.random()*2);
+   body.angularVelocity.set((Math.random()-.5)*2,(Math.random()-.5)*2,(Math.random()-.5)*2);
+ }
+ body.sleepSpeedLimit=.16;body.sleepTimeLimit=.8;
+ world.addBody(body);
+ const item={mesh,body,type};
+ mesh.userData.item=item;
+ objects.push(item);
+ updateCount();
+ select(item);
+ return item;
+}
+function remove(item){
+ if(!item)return;
+ if(drag && drag.item===item)endDrag();
+ if(selected===item)select(null);
+ world.removeBody(item.body);scene.remove(item.mesh);
+ item.mesh.geometry.dispose();item.mesh.material.dispose();
+ const index=objects.indexOf(item);if(index>=0)objects.splice(index,1);
+ updateCount();
+}
+function clearAll(){[...objects].forEach(remove);select(null);toast('Scene cleared');}
+function updateCount(){$('count').textContent=objects.length;}
+function tower(){
+ clearAll();
+ for(let y=0;y<5;y++)for(let x=0;x<3;x++){
+  spawn('box',new CANNON.Vec3((x-1)*1.02,.51+y*1.02,0));
+ }
+ select(null);toast('Stacking experiment loaded');
+}
+function scatter(){
+ for(let i=0;i<12;i++)spawn(['sphere','box','cylinder'][i%3]);
+ toast('12 objects added');
+}
+function resetScene(){
+ clearAll();simTime=0;
+ for(let i=0;i<4;i++)spawn('box',new CANNON.Vec3(0,.51+i*1.02,0));
+ select(null);toast('Scene reset');
+}
+function select(item){
+ if(selected && selected.mesh.material.emissive)selected.mesh.material.emissive.setHex(0x000000);
+ selected=item;
+ if(selected)selected.mesh.material.emissive.setHex(0x12364a);
+ $('selection-name').textContent=selected ? selected.type[0].toUpperCase()+selected.type.slice(1) : 'Nothing selected';
+ updateInspector();
+}
+function updateInspector(){
+ if(!selected){['i-mass','i-speed','i-energy','i-height'].forEach(id=>$(id).textContent='—');return;}
+ const b=selected.body;
+ const speed=b.velocity.length();
+ const energy=.5*b.mass*speed*speed;
+ $('i-mass').textContent=b.mass.toFixed(2)+' kg';
+ $('i-speed').textContent=speed.toFixed(2)+' m/s';
+ $('i-energy').textContent=energy.toFixed(2)+' J';
+ $('i-height').textContent=Math.max(0,b.position.y).toFixed(2)+' m';
+}
+function cameraPosition(){
+ camera.position.set(target.x+distance*Math.sin(phi)*Math.sin(theta),
+ target.y+distance*Math.cos(phi),
+ target.z+distance*Math.sin(phi)*Math.cos(theta));
+ camera.lookAt(target);
+}
+function resize(){
+ const w=window.innerWidth,h=window.innerHeight;
+ renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize,{passive:true});resize();cameraPosition();
+
+// UI controls
+document.querySelectorAll('[data-spawn]').forEach(btn=>btn.addEventListener('click',()=>spawn(btn.dataset.spawn)));
+$('clear').addEventListener('click',clearAll);
+$('tower').addEventListener('click',tower);
+$('random').addEventListener('click',scatter);
+$('reset').addEventListener('click',resetScene);
+$('pause').addEventListener('click',()=>{
+ paused=!paused;
+ $('pause').textContent=paused?'▶ Resume':'Ⅱ Pause';
+ $('run-state').textContent=paused?'PAUSED':'LIVE';
+ $('live-label').textContent=paused?'PAUSED':'LIVE';
+ $('live-label').style.color=paused?'#ffc875':'#7de3b2';
+});
+$('step').addEventListener('click',()=>{
+ if(!paused){toast('Pause the simulation before stepping');return;}
+ world.step(1/60);syncMeshes(1/60);simTime+=1/60;updateInspector();
+});
+$('speed').addEventListener('input',e=>{timeScale=Number(e.target.value);$('speed-out').textContent=timeScale.toFixed(2)+'×';});
+$('gravity').addEventListener('input',e=>{
+ const value=Number(e.target.value);world.gravity.set(0,-value,0);
+ $('gravity-out').textContent=value.toFixed(1)+' m/s²';wakeBodies();
+});
+$('wind').addEventListener('input',e=>{
+ windForce=Number(e.target.value);$('wind-out').textContent=windForce.toFixed(1)+' N';
+});
+$('bounce').addEventListener('input',e=>{
+ const value=Number(e.target.value);world.defaultContactMaterial.restitution=value;
+ $('bounce-out').textContent=value.toFixed(2);wakeBodies();
+});
+$('friction').addEventListener('input',e=>{
+ const value=Number(e.target.value);world.defaultContactMaterial.friction=value;
+ $('friction-out').textContent=value.toFixed(2);wakeBodies();
+});
+$('mass').addEventListener('input',e=>$('mass-out').textContent=Number(e.target.value).toFixed(1)+' kg');
+$('damping').addEventListener('input',e=>$('damping-out').textContent=Number(e.target.value).toFixed(2));
+$('deselect').addEventListener('click',()=>select(null));
+$('theme').addEventListener('click',()=>{
+ dark=!dark;
+ scene.background.set(dark?0x080d19:0xdce7f4);
+ groundMat.color.set(dark?0x111d31:0xe8eef6);
+ grid.material.forEach(m=>m.color.set(dark?0x345071:0xb5c4d8));
+ $('theme').textContent=dark?'◐':'☼';
+});
+$('help').addEventListener('click',()=>toast('Drag objects to move · Drag empty space to orbit · Scroll/pinch to zoom · Tap an object to inspect it'));
+
+function wakeBodies(){objects.forEach(o=>o.body.wakeUp());}
+let toastTimer;
+function toast(message){
+ const el=$('toast');el.textContent=message;el.classList.add('show');
+ clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1900);
+}
+
+// Pointer interaction: drag bodies, orbit camera, pinch zoom.
+function setRay(event){
+ const rect=canvas.getBoundingClientRect();
+ pointerNdc.set((event.clientX-rect.left)/rect.width*2-1,-((event.clientY-rect.top)/rect.height)*2+1);
+ raycaster.setFromCamera(pointerNdc,camera);
+}
+function endDrag(){
+ if(!drag)return;
+ world.removeConstraint(drag.constraint);
+ world.removeBody(drag.anchor);
+ drag=null;
+}
+canvas.addEventListener('pointerdown',event=>{
+ canvas.setPointerCapture(event.pointerId);
+ pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+ if(pointers.size===2){
+  endDrag();orbit=false;
+  const [a,b]=[...pointers.values()];pinchDistance=Math.hypot(a.x-b.x,a.y-b.y);return;
+ }
+ setRay(event);
+ const hit=raycaster.intersectObjects(objects.map(o=>o.mesh),false)[0];
+ if(hit){
+  const item=hit.object.userData.item;select(item);
+  const body=item.body;body.wakeUp();
+  const anchor=new CANNON.Body({mass:0});
+  anchor.collisionFilterGroup=0;anchor.collisionFilterMask=0;
+  anchor.position.set(hit.point.x,hit.point.y,hit.point.z);world.addBody(anchor);
+  const local=body.pointToLocalFrame(anchor.position);
+  const constraint=new CANNON.PointToPointConstraint(body,local,anchor,new CANNON.Vec3(),Math.max(120,350*body.mass));
+  world.addConstraint(constraint);
+  const normal=camera.getWorldDirection(new THREE.Vector3());
+  drag={item,body,anchor,constraint,plane:new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point)};
+  orbit=false;
+ }else{select(null);orbit=true;}
+});
+canvas.addEventListener('pointermove',event=>{
+ const p=pointers.get(event.pointerId);if(!p)return;
+ const dx=event.clientX-p.x,dy=event.clientY-p.y;p.x=event.clientX;p.y=event.clientY;
+ if(pointers.size===2){
+  const [a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);
+  if(pinchDistance>0)distance=THREE.MathUtils.clamp(distance*pinchDistance/Math.max(1,d),6,48);
+  pinchDistance=d;return;
+ }
+ if(drag){
+  setRay(event);const point=new THREE.Vector3();
+  if(raycaster.ray.intersectPlane(drag.plane,point)){
+   point.y=Math.max(.25,point.y);
+   drag.anchor.position.set(point.x,point.y,point.z);drag.body.wakeUp();
+  }
+ }else if(orbit){
+  theta-=dx*.006;phi=THREE.MathUtils.clamp(phi-dy*.006,.16,1.48);
+ }
+});
+function pointerUp(event){
+ pointers.delete(event.pointerId);
+ if(pointers.size===0){endDrag();orbit=false;pinchDistance=0;}
+ else if(pointers.size===1){orbit=true;}
+}
+canvas.addEventListener('pointerup',pointerUp);
+canvas.addEventListener('pointercancel',pointerUp);
+canvas.addEventListener('wheel',event=>{
+ event.preventDefault();distance=THREE.MathUtils.clamp(distance*(1+event.deltaY*.001),6,48);
+},{passive:false});
+
+// Physics update. Fixed-step integration keeps behaviour more stable across frame rates.
+const FIXED_DT=1/60;
+let accumulator=0;
+function syncMeshes(dt){
+ for(let i=objects.length-1;i>=0;i--){
+  const item=objects[i],b=item.body;
+  if(b.position.y < -30 || Math.abs(b.position.x)>75 || Math.abs(b.position.z)>75){remove(item);continue;}
+  item.mesh.position.copy(b.position);item.mesh.quaternion.copy(b.quaternion);
+ }
+}
+function animate(now){
+ requestAnimationFrame(animate);
+ let frameDt=Math.min((now-lastFrame)/1000,.05);lastFrame=now;
+ fpsFrames++;
+ if(now-fpsStamp>=600){currentFps=Math.round(fpsFrames*1000/(now-fpsStamp));fpsFrames=0;fpsStamp=now;$('fps').textContent=currentFps;}
+ if(!paused){
+  accumulator+=frameDt*timeScale;
+  let steps=0;
+  while(accumulator>=FIXED_DT && steps<5){
+   if(windForce!==0){
+    for(const item of objects){
+     if(item.body.mass>0 && item.body.type!==CANNON.Body.STATIC){
+      item.body.applyForce(new CANNON.Vec3(windForce,0,0),item.body.position);
+     }
+    }
+   }
+   world.step(FIXED_DT);
+   accumulator-=FIXED_DT;simTime+=FIXED_DT;steps++;
+  }
+  if(steps>0)syncMeshes(FIXED_DT);
+ }
+ cameraPosition();
+ if(selected)updateInspector();
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+resetScene();
+})();
+</script>
+</body>
+</html>
